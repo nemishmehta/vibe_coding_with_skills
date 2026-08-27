@@ -9,6 +9,11 @@ import pandas as pd
 
 GROUP_BY_DIMENSIONS = {"origin", "dest", "route"}
 
+# Below this many scheduled flights, a group's rate is noisy enough that the
+# chart should flag it rather than show it at full visual weight. Chosen from
+# this dataset's destination counts: flags the bottom ~11% (12 of 105 dests).
+LOW_SAMPLE_THRESHOLD = 100
+
 RESULT_COLUMNS = [
     "scheduled_count",
     "cancelled_count",
@@ -17,6 +22,7 @@ RESULT_COLUMNS = [
     "delay_rate",
     "cancellation_rate",
     "unknown_outcome_rate",
+    "is_low_sample",
 ]
 
 
@@ -53,6 +59,7 @@ def compute_metrics(flights: pd.DataFrame, group_by: str, filters: dict | None =
     )
     result["cancellation_rate"] = result["cancelled_count"] / result["scheduled_count"]
     result["unknown_outcome_rate"] = result["unknown_count"] / result["scheduled_count"]
+    result["is_low_sample"] = result["scheduled_count"] < LOW_SAMPLE_THRESHOLD
 
     result = result.drop(columns=["_delayed_count"])
     return result.sort_values("delay_rate", ascending=False).reset_index(drop=True)

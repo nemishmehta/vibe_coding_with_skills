@@ -47,7 +47,13 @@ def load_flights() -> pd.DataFrame:
     return pd.read_csv(FLIGHTS_CSV_PATH)
 
 
+LOW_SAMPLE_OPACITY = 0.35
+
+
 def render_rates_chart(metrics: pd.DataFrame, group_col: str, axis_label: str) -> go.Figure:
+    opacity = metrics["is_low_sample"].map({True: LOW_SAMPLE_OPACITY, False: 1.0})
+    low_sample_note = metrics["is_low_sample"].map({True: " (low sample)", False: ""})
+
     fig = go.Figure()
     for column, label, color in RATE_SERIES:
         fig.add_bar(
@@ -55,8 +61,11 @@ def render_rates_chart(metrics: pd.DataFrame, group_col: str, axis_label: str) -
             x=metrics[group_col],
             y=metrics[column],
             marker_color=color,
-            customdata=metrics["scheduled_count"],
-            hovertemplate=f"%{{x}}<br>{label}: %{{y:.1%}}<br>Flights: %{{customdata}}<extra></extra>",
+            marker_opacity=opacity,
+            customdata=pd.DataFrame({"count": metrics["scheduled_count"], "note": low_sample_note}),
+            hovertemplate=(
+                f"%{{x}}<br>{label}: %{{y:.1%}}<br>Flights: %{{customdata[0]}}%{{customdata[1]}}<extra></extra>"
+            ),
         )
     fig.update_layout(
         barmode="group",

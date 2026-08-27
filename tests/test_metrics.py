@@ -196,3 +196,17 @@ def test_invalid_group_by_raises():
     flights = make_flights([{}])
     with pytest.raises(ValueError):
         compute_metrics(flights, group_by="carrier")
+
+
+def test_group_below_low_sample_threshold_is_flagged():
+    flights = make_flights([{"dest": "LAX", "arr_delay": 0.0}] * 5)
+    result = compute_metrics(flights, group_by="dest").set_index("dest")
+    assert result.loc["LAX", "scheduled_count"] == 5
+    assert result.loc["LAX", "is_low_sample"] == True  # noqa: E712
+
+
+def test_group_at_or_above_low_sample_threshold_is_not_flagged():
+    flights = make_flights([{"dest": "LAX", "arr_delay": 0.0}] * 100)
+    result = compute_metrics(flights, group_by="dest").set_index("dest")
+    assert result.loc["LAX", "scheduled_count"] == 100
+    assert result.loc["LAX", "is_low_sample"] == False  # noqa: E712
