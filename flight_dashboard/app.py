@@ -24,6 +24,10 @@ VIEWS = {
     "Destination": "dest",
 }
 
+# group_by dimension of the top-level view a Route drill-down was launched from ->
+# the preposition used when describing the scoped Route view (e.g. "Routes from JFK").
+DRILLDOWN_PREPOSITION = {"origin": "from", "dest": "to"}
+
 MONTH_OPTIONS = [("All months", None)] + [
     (calendar.month_name[m], m) for m in range(1, 13)
 ]
@@ -64,13 +68,38 @@ def render_rates_chart(metrics: pd.DataFrame, group_col: str, axis_label: str) -
     return fig
 
 
+def render_metrics_table(metrics: pd.DataFrame, group_col: str, group_label: str):
+    """Renders the ranked metrics table and returns its selection event, so callers
+    can drill down into whichever row the user clicks."""
+    display = metrics.rename(columns={
+        group_col: group_label,
+        "scheduled_count": "Flights",
+        "delay_rate": "Delay Rate",
+        "cancellation_rate": "Cancellation Rate",
+        "unknown_outcome_rate": "Unknown Outcome Rate",
+    })[[group_label, "Flights", "Delay Rate", "Cancellation Rate", "Unknown Outcome Rate"]]
+    return st.dataframe(
+        display,
+        hide_index=True,
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        column_config={
+            "Delay Rate": st.column_config.NumberColumn(format="percent"),
+            "Cancellation Rate": st.column_config.NumberColumn(format="percent"),
+            "Unknown Outcome Rate": st.column_config.NumberColumn(format="percent"),
+        },
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="Flight Delay Dashboard", layout="wide")
     st.title("Flight Delay Dashboard")
     st.caption("When and where are you most likely to get delayed? 2013 NYC-departure flights.")
 
-    view_label = st.radio("View", list(VIEWS.keys()), horizontal=True)
-    group_by = VIEWS[view_label]
+    if "drilldown" not in st.session_state:
+        st.session_state.drilldown = None
+    drilldown = st.session_state.drilldown
 
     month_col, day_col, hour_col = st.columns(3)
     with month_col:
@@ -80,33 +109,44 @@ def main() -> None:
     with hour_col:
         hour = select_filter("Hour of scheduled departure", HOUR_OPTIONS)
 
-    filters = {
+    time_filters = {
         key: value
         for key, value in (("month", month), ("day_of_week", day_of_week), ("hour", hour))
         if value is not None
     }
 
     flights = load_flights()
-    metrics = compute_metrics(flights, group_by=group_by, filters=filters)
 
-    st.plotly_chart(render_rates_chart(metrics, group_by, view_label), use_container_width=True)
+    if drilldown is None:
+        view_label = st.radio("View", list(VIEWS.keys()), horizontal=True)
+        group_by = VIEWS[view_label]
 
-    st.dataframe(
-        metrics.rename(columns={
-            group_by: view_label,
-            "scheduled_count": "Flights",
-            "delay_rate": "Delay Rate",
-            "cancellation_rate": "Cancellation Rate",
-            "unknown_outcome_rate": "Unknown Outcome Rate",
-        })[[view_label, "Flights", "Delay Rate", "Cancellation Rate", "Unknown Outcome Rate"]],
-        hide_index=True,
-        use_container_width=True,
-        column_config={
-            "Delay Rate": st.column_config.NumberColumn(format="percent"),
-            "Cancellation Rate": st.column_config.NumberColumn(format="percent"),
-            "Unknown Outcome Rate": st.column_config.NumberColumn(format="percent"),
-        },
-    )
+        metrics = compute_metrics(flights, group_by=group_by, filters=time_filters)
+        st.plotly_chart(render_rates_chart(metrics, group_by, view_label), use_container_width=True)
+
+        st.caption(f"Click a row to drill down into that {view_label}'s Routes.")
+        event = render_metrics_table(metrics, group_by, view_label)
+        selected_rows = event.selection.rows
+        if selected_rows:
+            selected_value = metrics.iloc[selected_rows[0]][group_by]
+            st.session_state.drilldown = {"from_view": view_label, "dim": group_by, "value": selected_value}
+            st.rerun()
+    else:
+        from_view = drilldown["from_view"]
+        dim = drilldown["dim"]
+        value = drilldown["value"]
+
+        if st.button(f"← Back to {from_view} view"):
+            st.session_state.drilldown = None
+            st.rerun()
+
+        preposition = DRILLDOWN_PREPOSITION[dim]
+        st.subheader(f"Routes {preposition} {value}")
+
+        route_filters = {**time_filters, dim: value}
+        metrics = compute_metrics(flights, group_by="route", filters=route_filters)
+        st.plotly_chart(render_rates_chart(metrics, "route", "Route"), use_container_width=True)
+        render_metrics_table(metrics, "route", "Route")
 
 
 if __name__ == "__main__":

@@ -165,6 +165,15 @@ def test_drilldown_scopes_route_view_to_one_origin():
     assert list(result["route"]) == ["JFK-LAX"]
 
 
+def test_drilldown_scopes_route_view_to_one_dest():
+    flights = make_flights([
+        {"origin": "JFK", "dest": "LAX", "arr_delay": 20.0},
+        {"origin": "JFK", "dest": "SFO", "arr_delay": 0.0},
+    ])
+    result = compute_metrics(flights, group_by="route", filters={"dest": "LAX"})
+    assert list(result["route"]) == ["JFK-LAX"]
+
+
 def test_empty_filtered_population_does_not_throw():
     flights = make_flights([{"month": 1, "arr_delay": 20.0}])
     result = compute_metrics(flights, group_by="origin", filters={"month": 12})
