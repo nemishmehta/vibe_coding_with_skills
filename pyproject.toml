@@ -1,0 +1,23 @@
+[project]
+name = "flight-delay-dashboard"
+version = "0.1.0"
+description = "Interactive dashboard exploring delay, cancellation, and unknown-outcome risk across 2013 NYC-departure flights."
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "streamlit>=1.30",
+    "plotly>=5.18",
+]
+
+[dependency-groups]
+dev = ["pytest>=7.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["flight_dashboard"]
