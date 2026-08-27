@@ -16,9 +16,8 @@ This provisions the pinned Python version (`.python-version`), creates `.venv`, 
 
 ```sh
 uv run pytest
+uv run streamlit run flight_dashboard/app.py
 ```
-
-Once the Streamlit entry point exists: `uv run streamlit run <entry-point>.py`.
 
 `uv run` picks up the project's venv automatically — no manual activation needed.
 
