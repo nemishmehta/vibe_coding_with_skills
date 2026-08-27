@@ -17,13 +17,19 @@ RATE_SERIES = [
     ("unknown_outcome_rate", "Unknown Outcome Rate", "#AB63FA"),
 ]
 
+# Display label -> (metrics module group_by key, chart x-axis title)
+VIEWS = {
+    "Origin": "origin",
+    "Destination": "dest",
+}
+
 
 @st.cache_data
 def load_flights() -> pd.DataFrame:
     return pd.read_csv(FLIGHTS_CSV_PATH)
 
 
-def render_rates_chart(metrics: pd.DataFrame, group_col: str) -> go.Figure:
+def render_rates_chart(metrics: pd.DataFrame, group_col: str, axis_label: str) -> go.Figure:
     fig = go.Figure()
     for column, label, color in RATE_SERIES:
         fig.add_bar(
@@ -38,7 +44,7 @@ def render_rates_chart(metrics: pd.DataFrame, group_col: str) -> go.Figure:
         barmode="group",
         yaxis_tickformat=".0%",
         yaxis_title="Rate",
-        xaxis_title=group_col.capitalize(),
+        xaxis_title=axis_label,
     )
     fig.update_xaxes(categoryorder="array", categoryarray=metrics[group_col])
     return fig
@@ -49,19 +55,22 @@ def main() -> None:
     st.title("Flight Delay Dashboard")
     st.caption("When and where are you most likely to get delayed? 2013 NYC-departure flights.")
 
-    flights = load_flights()
-    metrics = compute_metrics(flights, group_by="origin")
+    view_label = st.radio("View", list(VIEWS.keys()), horizontal=True)
+    group_by = VIEWS[view_label]
 
-    st.plotly_chart(render_rates_chart(metrics, "origin"), use_container_width=True)
+    flights = load_flights()
+    metrics = compute_metrics(flights, group_by=group_by)
+
+    st.plotly_chart(render_rates_chart(metrics, group_by, view_label), use_container_width=True)
 
     st.dataframe(
         metrics.rename(columns={
-            "origin": "Origin",
+            group_by: view_label,
             "scheduled_count": "Flights",
             "delay_rate": "Delay Rate",
             "cancellation_rate": "Cancellation Rate",
             "unknown_outcome_rate": "Unknown Outcome Rate",
-        })[["Origin", "Flights", "Delay Rate", "Cancellation Rate", "Unknown Outcome Rate"]],
+        })[[view_label, "Flights", "Delay Rate", "Cancellation Rate", "Unknown Outcome Rate"]],
         hide_index=True,
         use_container_width=True,
         column_config={
