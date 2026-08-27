@@ -1,6 +1,7 @@
 """Streamlit entry point. Manual/visual-check only, per ADR 0001 — no automated
 tests target this module; flight_dashboard.metrics is the tested seam."""
 
+import calendar
 import pathlib
 
 import pandas as pd
@@ -22,6 +23,19 @@ VIEWS = {
     "Origin": "origin",
     "Destination": "dest",
 }
+
+MONTH_OPTIONS = [("All months", None)] + [
+    (calendar.month_name[m], m) for m in range(1, 13)
+]
+DAY_OF_WEEK_OPTIONS = [("All days", None)] + [
+    (calendar.day_name[d], d) for d in range(7)
+]
+HOUR_OPTIONS = [("All hours", None)] + [(f"{h:02d}:00", h) for h in range(24)]
+
+
+def select_filter(label: str, options: list[tuple[str, int | None]]) -> int | None:
+    index = st.selectbox(label, range(len(options)), format_func=lambda i: options[i][0])
+    return options[index][1]
 
 
 @st.cache_data
@@ -58,8 +72,22 @@ def main() -> None:
     view_label = st.radio("View", list(VIEWS.keys()), horizontal=True)
     group_by = VIEWS[view_label]
 
+    month_col, day_col, hour_col = st.columns(3)
+    with month_col:
+        month = select_filter("Month", MONTH_OPTIONS)
+    with day_col:
+        day_of_week = select_filter("Day of week", DAY_OF_WEEK_OPTIONS)
+    with hour_col:
+        hour = select_filter("Hour of scheduled departure", HOUR_OPTIONS)
+
+    filters = {
+        key: value
+        for key, value in (("month", month), ("day_of_week", day_of_week), ("hour", hour))
+        if value is not None
+    }
+
     flights = load_flights()
-    metrics = compute_metrics(flights, group_by=group_by)
+    metrics = compute_metrics(flights, group_by=group_by, filters=filters)
 
     st.plotly_chart(render_rates_chart(metrics, group_by, view_label), use_container_width=True)
 
