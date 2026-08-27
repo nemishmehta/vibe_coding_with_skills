@@ -36,10 +36,47 @@ DAY_OF_WEEK_OPTIONS = [("All days", None)] + [
 ]
 HOUR_OPTIONS = [("All hours", None)] + [(f"{h:02d}:00", h) for h in range(24)]
 
+# Time filter key -> (widget key, options list, human-readable label prefix), used to
+# both render each filter's selectbox and describe it in the state bar/reset control.
+TIME_FILTERS = [
+    ("month", "month_filter", MONTH_OPTIONS, "Month"),
+    ("day_of_week", "day_of_week_filter", DAY_OF_WEEK_OPTIONS, "Day"),
+    ("hour", "hour_filter", HOUR_OPTIONS, "Hour"),
+]
 
-def select_filter(label: str, options: list[tuple[str, int | None]]) -> int | None:
-    index = st.selectbox(label, range(len(options)), format_func=lambda i: options[i][0])
+VIEW_RADIO_KEY = "view_radio"
+
+
+def select_filter(label: str, options: list[tuple[str, int | None]], key: str) -> int | None:
+    index = st.selectbox(label, range(len(options)), format_func=lambda i: options[i][0], key=key)
     return options[index][1]
+
+
+def describe_state(view_label: str, drilldown: dict | None, time_filters: dict) -> str:
+    """Human-readable summary of the current view and active time filters, for the
+    persistent state bar. Pure string formatting so it's easy to reason about/test
+    independent of Streamlit's rendering."""
+    if drilldown is None:
+        view_text = f"**View:** {view_label}"
+    else:
+        preposition = DRILLDOWN_PREPOSITION[drilldown["dim"]]
+        view_text = f"**View:** Route ({preposition} {drilldown['value']}, drilled down from {drilldown['from_view']})"
+
+    filter_labels = [
+        f"{prefix} = {next(label for label, value in options if value == time_filters[key])}"
+        for key, _widget_key, options, prefix in TIME_FILTERS
+        if key in time_filters
+    ]
+    filters_text = "**Filters:** " + (", ".join(filter_labels) if filter_labels else "None")
+
+    return f"{view_text}  \n{filters_text}"
+
+
+def reset_dashboard() -> None:
+    st.session_state.drilldown = None
+    st.session_state[VIEW_RADIO_KEY] = next(iter(VIEWS))
+    for _key, widget_key, _options, _prefix in TIME_FILTERS:
+        st.session_state[widget_key] = 0
 
 
 @st.cache_data
@@ -112,11 +149,11 @@ def main() -> None:
 
     month_col, day_col, hour_col = st.columns(3)
     with month_col:
-        month = select_filter("Month", MONTH_OPTIONS)
+        month = select_filter("Month", MONTH_OPTIONS, key="month_filter")
     with day_col:
-        day_of_week = select_filter("Day of week", DAY_OF_WEEK_OPTIONS)
+        day_of_week = select_filter("Day of week", DAY_OF_WEEK_OPTIONS, key="day_of_week_filter")
     with hour_col:
-        hour = select_filter("Hour of scheduled departure", HOUR_OPTIONS)
+        hour = select_filter("Hour of scheduled departure", HOUR_OPTIONS, key="hour_filter")
 
     time_filters = {
         key: value
@@ -124,10 +161,20 @@ def main() -> None:
         if value is not None
     }
 
+    # The radio widget below hasn't rendered yet this run, but Streamlit persists its
+    # value in session_state across reruns under its key, so this reads the current
+    # view ahead of the widget itself -- needed since the state bar renders first.
+    current_view_label = st.session_state.get(VIEW_RADIO_KEY, next(iter(VIEWS)))
+    state_bar_col, reset_col = st.columns([5, 1])
+    with state_bar_col:
+        st.markdown(describe_state(current_view_label, drilldown, time_filters))
+    with reset_col:
+        st.button("Reset dashboard", on_click=reset_dashboard, use_container_width=True)
+
     flights = load_flights()
 
     if drilldown is None:
-        view_label = st.radio("View", list(VIEWS.keys()), horizontal=True)
+        view_label = st.radio("View", list(VIEWS.keys()), horizontal=True, key=VIEW_RADIO_KEY)
         group_by = VIEWS[view_label]
 
         metrics = compute_metrics(flights, group_by=group_by, filters=time_filters)
