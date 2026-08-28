@@ -2,6 +2,14 @@
 
 See [`project.md`](project.md) for what this is and [`CONTEXT.md`](CONTEXT.md) for the domain vocabulary.
 
+## Data
+
+Download the dataset and place it in the project root as flights.csv:
+
+https://www.kaggle.com/datasets/mahoora00135/flights
+
+The app expects the following columns to be present: `month`, `day`, `dep_delay`, `arr_delay`, `carrier`, `origin`, `dest`, `hour`, `time_hour`, `name`.
+
 ## Setup
 
 This project is managed with [uv](https://docs.astral.sh/uv/). Install uv, then:
